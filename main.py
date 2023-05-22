@@ -1,34 +1,38 @@
-import os
-from dotenv.main import load_dotenv
-import sqlalchemy as sq
-from sqlalchemy.orm import sessionmaker
-from model_db import create_tables, Base, Publisher, Shop, Book, Stock, Sale
+import datetime
+from fill_db import fill_db
+from connect import connect_db
+from model_db import create_tables, Publisher, Shop, Book, Stock, Sale
 
-# информация о продаже по названию книги
-def sale_info(test):
-    q = session.query(Book, Stock, Sale, Shop, Publisher)\
-        .filter(Shop.id == Stock.shop_id,
-                Stock.id == Sale.stock_id,
-                Publisher.id == Book.pub_id,
-                Book.id == Stock.book_id).filter(Publisher.id == test)
-    for i in q.all():
-        print(f'{i.Book.title.ljust(40)} | '
-              f'{i.Shop.shop_name.ljust(10)} | '
-              f'{str(i.Sale.price).ljust(5)} | '
-              f'{str(i.Sale.date_sale).ljust(10)} |')
+# Информация о продаже по имени или id издателя
+def sale_info(pub):
+    query = session.query(
+        Book.title, Shop.shop_name, Sale.price, Sale.date_sale).\
+        select_from(Shop).\
+        join(Stock, Stock.shop_id == Shop.id).\
+        join(Book, Book.id == Stock.book_id).\
+        join(Publisher, Publisher.id == Book.pub_id).\
+        join(Sale, Sale.stock_id == Stock.id)
 
+    print(f'{"Book": ^40} | {"Shop": ^10} | {"Price": ^8} | {"Date": ^10}')
+    if pub.isdigit():
+        query = query.filter(Publisher.id == pub).all()
+        for book_title, shop_name, price, date_sale in query:
+            print(f'{book_title: <40} | {shop_name: <10} | '
+                  f'{price: < 8} | {date_sale.strftime("%d-%m-%Y")}')
+    else:
+        query = query.filter(Publisher.pub_name == pub).all()
+        for book_title, shop_name, price, date_sale in query:
+            print(f'{book_title: <40} | {shop_name: <10} | '
+                  f'{price: < 8} | {date_sale.strftime("%d-%m-%Y")}')
 
 if __name__ == '__main__':
-    load_dotenv()
-    password = os.environ['password']
-    DSN = f'postgresql://postgres:{password}@localhost:5432/books'
-    engine = sq.create_engine(DSN)
-    Session = sessionmaker(bind=engine)
-    session = Session()
-
+    session, engine = connect_db()
     # Создание таблиц:
     create_tables(engine)
+    # заполнение базы данных из 'tests_data.json':
+    fill_db()
     # Вывод информации о продаже:
-    sale_info(1)
+    test = input('Введите id или имя издателя: ')
+    sale_info(test)
 
     session.close()
